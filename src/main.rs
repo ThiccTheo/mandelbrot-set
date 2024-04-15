@@ -1,4 +1,9 @@
-use bevy::{prelude::*, window::WindowResolution};
+use bevy::{
+    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    input::mouse::MouseWheel,
+    prelude::*,
+    window::WindowResolution,
+};
 
 const WIDTH: usize = 1280;
 const HEIGHT: usize = 720;
@@ -8,17 +13,21 @@ const OUT_SET: Color = Color::ORANGE;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: WindowResolution::new(WIDTH as f32, HEIGHT as f32),
-                title: String::from("Mandelbrot Set"),
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: WindowResolution::new(WIDTH as f32, HEIGHT as f32),
+                    title: String::from("Mandelbrot Set"),
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
+            FrameTimeDiagnosticsPlugin::default(),
+            LogDiagnosticsPlugin::default(),
+        ))
         .insert_resource(ClearColor(OUT_SET))
         .add_systems(Startup, spawn_camera)
-        .add_systems(Update, color_pixels_in_viewport)
+        .add_systems(Update, (zoom_camera, color_pixels_in_viewport).chain())
         .run();
 }
 
@@ -26,6 +35,35 @@ fn spawn_camera(mut cmds: Commands) {
     let mut cam = Camera2dBundle::default();
     cam.projection.scale /= 250.;
     cmds.spawn(cam);
+}
+
+fn zoom_camera(
+    mut cam_qry: Query<&mut OrthographicProjection, With<Camera>>,
+    mut scroll_wheel_evr: EventReader<MouseWheel>,
+) {
+    let mut cam_proj = cam_qry.single_mut();
+
+    for scroll_event in scroll_wheel_evr.read() {
+        if scroll_event.y > 0. {
+            cam_proj.scale /= 2.;
+        } else if scroll_event.y < 0. {
+            cam_proj.scale *= 2.;
+        }
+    }
+}
+
+/*
+f : C  -> C
+    z |-> z^2 + c
+*/
+fn f(z: Vec2, c: Vec2) -> Vec2 {
+    /*
+    z^2 = (a + bi)^2
+        = (a + bi)(a + bi)
+        = a^2 + 2abi - b^2
+        = (a^2 - b^2) + 2abi <=> <x^2 - y^2, 2xy>
+    */
+    Vec2::new(z.x * z.x - z.y * z.y, 2. * z.x * z.y) + c
 }
 
 fn color_pixels_in_viewport(cam_qry: Query<(&Camera, &GlobalTransform)>, mut gizmos: Gizmos) {
@@ -61,18 +99,4 @@ fn color_pixels_in_viewport(cam_qry: Query<(&Camera, &GlobalTransform)>, mut giz
             );
         }
     }
-}
-
-/*
-f : C  -> C
-    z |-> z^2 + c
-*/
-fn f(z: Vec2, c: Vec2) -> Vec2 {
-    /*
-    z^2 = (a + bi)^2
-        = (a + bi)(a + bi)
-        = a^2 + 2abi - b^2
-        = (a^2 - b^2) + 2abi <=> <x^2 - y^2, 2xy>
-    */
-    Vec2::new(z.x * z.x - z.y * z.y, 2. * z.x * z.y) + c
 }
