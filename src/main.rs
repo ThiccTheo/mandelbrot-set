@@ -31,7 +31,7 @@ fn main() {
         ))
         .insert_resource(ClearColor(OUT_SET))
         .add_systems(Startup, (spawn_cameras, spawn_visual))
-        .add_systems(Update, (adjust_camera, color_pixels_in_viewport).chain())
+        .add_systems(Update, (adjust_view_of_visual, color_pixels_in_viewport).chain())
         .run();
 }
 
@@ -48,6 +48,34 @@ fn spawn_cameras(mut cmds: Commands) {
     calc_cam.projection.scale /= 250.;
     calc_cam.camera.is_active = false;
     cmds.spawn((CalculationsCamera, calc_cam));
+}
+
+fn adjust_view_of_visual(
+    mut cam_qry: Query<(&mut Transform, &mut OrthographicProjection), With<CalculationsCamera>>,
+    mut scroll_wheel_evr: EventReader<MouseWheel>,
+    kb: Res<ButtonInput<KeyCode>>
+) {
+    let (mut cam_xform, mut cam_projection) = cam_qry.single_mut();
+
+    if let Some(scroll_event) = scroll_wheel_evr.read().nth(0) {
+        if scroll_event.y > 0. {
+            cam_projection.scale /= 2.;
+        } else if scroll_event.y < 0. {
+            cam_projection.scale *= 2.;
+        }
+    }
+    if kb.just_pressed(KeyCode::ArrowUp) {
+        cam_xform.translation.y += 1.;
+    }
+    if kb.just_pressed(KeyCode::ArrowDown) {
+        cam_xform.translation.y -= 1.;
+    }
+    if kb.just_pressed(KeyCode::ArrowLeft) {
+        cam_xform.translation.x -= 1.;
+    }
+    if kb.just_pressed(KeyCode::ArrowRight) {
+        cam_xform.translation.x += 1.;
+    }
 }
 
 #[derive(Resource, Deref, DerefMut)]
@@ -73,21 +101,6 @@ fn spawn_visual(mut cmds: Commands, mut imgs: ResMut<Assets<Image>>) {
         texture: img_handle.clone_weak(),
         ..default()
     });
-}
-
-fn adjust_camera(
-    mut cam_qry: Query<&mut OrthographicProjection, With<CalculationsCamera>>,
-    mut scroll_wheel_evr: EventReader<MouseWheel>,
-) {
-    let mut cam_proj = cam_qry.single_mut();
-
-    if let Some(scroll_event) = scroll_wheel_evr.read().nth(0) {
-        if scroll_event.y > 0. {
-            cam_proj.scale /= 2.;
-        } else if scroll_event.y < 0. {
-            cam_proj.scale *= 2.;
-        }
-    }
 }
 
 /*
