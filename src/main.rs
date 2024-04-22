@@ -12,11 +12,12 @@ use {
     rayon::prelude::*,
 };
 
-const WIDTH: usize = 1280;
-const HEIGHT: usize = 720;
+const WIDTH: usize = 200;
+const HEIGHT: usize = 200;
 const ITERATIONS: usize = 50;
 const IN_SET: Color = Color::BLACK;
 const OUT_SET: Color = Color::ORANGE;
+const DEFAULT_ZOOM: f32 = 200.;
 
 fn main() {
     App::new()
@@ -25,7 +26,7 @@ fn main() {
                 primary_window: Some(Window {
                     resolution: WindowResolution::new(WIDTH as f32, HEIGHT as f32),
                     title: String::from("Mandelbrot Set"),
-                    mode: WindowMode::SizedFullscreen,
+                    mode: WindowMode::Windowed,
                     ..default()
                 }),
                 ..default()
@@ -52,7 +53,7 @@ fn spawn_cameras(mut cmds: Commands) {
     cmds.spawn((VisualCamera, Camera2dBundle::default()));
 
     let mut calc_cam = Camera2dBundle::default();
-    calc_cam.projection.scale /= 250.;
+    calc_cam.projection.scale /= DEFAULT_ZOOM;
     calc_cam.camera.is_active = false;
     cmds.spawn((CalculationsCamera, calc_cam));
 }
@@ -71,17 +72,19 @@ fn adjust_view_of_visual(
             cam_projection.scale *= 2.;
         }
     }
+    let xlation_amt = cam_projection.scale * DEFAULT_ZOOM;
+
     if kb.just_pressed(KeyCode::ArrowUp) {
-        cam_xform.translation.y += 1.;
+        cam_xform.translation.y += xlation_amt;
     }
     if kb.just_pressed(KeyCode::ArrowDown) {
-        cam_xform.translation.y -= 1.;
+        cam_xform.translation.y -= xlation_amt;
     }
     if kb.just_pressed(KeyCode::ArrowLeft) {
-        cam_xform.translation.x -= 1.;
+        cam_xform.translation.x -= xlation_amt;
     }
     if kb.just_pressed(KeyCode::ArrowRight) {
-        cam_xform.translation.x += 1.;
+        cam_xform.translation.x += xlation_amt;
     }
 }
 
@@ -133,34 +136,35 @@ fn color_pixels_in_viewport(
     let Some(img) = imgs.get_mut(visual.0.clone_weak()) else {
         return;
     };
+    img.data.clear();
+    img.data.par_extend(
+        (0..WIDTH * HEIGHT)
+            .into_par_iter()
+            .map(|i| (i % WIDTH, i / WIDTH))
+            .map(|(x, y)| {
+                let c = cam
+                    .viewport_to_world_2d(cam_glob_xform, Vec2::new(x as f32, y as f32))
+                    .unwrap();
+                let mut z = Vec2::ZERO;
+                let mut successful_iterations = 0;
 
-    img.data = (0..WIDTH * HEIGHT)
-        .into_par_iter()
-        .map(|i| (i % WIDTH, i / WIDTH))
-        .map(|(x, y)| {
-            let c = cam
-                .viewport_to_world_2d(cam_glob_xform, Vec2::new(x as f32, y as f32))
-                .unwrap();
-            let mut z = Vec2::ZERO;
-            let mut successful_iterations = 0;
+                for _ in 1..ITERATIONS {
+                    z = f(z, c);
 
-            for _ in 1..ITERATIONS {
-                z = f(z, c);
-
-                if (z.x + z.y).abs() > 2. {
-                    break;
+                    if (z.x + z.y).abs() > 2. {
+                        break;
+                    }
+                    successful_iterations += 1;
                 }
-                successful_iterations += 1;
-            }
-            let rate = successful_iterations as f32 / ITERATIONS as f32;
+                let rate = successful_iterations as f32 / ITERATIONS as f32;
 
-            Color::rgb(
-                f32::lerp(OUT_SET.r(), IN_SET.r(), rate),
-                f32::lerp(OUT_SET.g(), IN_SET.g(), rate),
-                f32::lerp(OUT_SET.b(), IN_SET.b(), rate),
-            )
-            .as_rgba_u8()
-        })
-        .flatten()
-        .collect();
+                Color::rgb(
+                    f32::lerp(OUT_SET.r(), IN_SET.r(), rate),
+                    f32::lerp(OUT_SET.g(), IN_SET.g(), rate),
+                    f32::lerp(OUT_SET.b(), IN_SET.b(), rate),
+                )
+                .as_rgba_u8()
+            })
+            .flatten(),
+    );
 }
