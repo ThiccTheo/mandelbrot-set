@@ -14,10 +14,17 @@ use {
 
 const WIDTH: usize = 200;
 const HEIGHT: usize = 200;
-const ITERATIONS: usize = 50;
-const IN_SET: Color = Color::BLACK;
-const OUT_SET: Color = Color::ORANGE;
-const DEFAULT_ZOOM: f32 = 200.;
+const MAX_ITERATIONS: usize = 50;
+const DEFAULT_ZOOM: f32 = 50.;
+const PALETTE: [Color; 7] = [
+    Color::RED,
+    Color::ORANGE,
+    Color::YELLOW,
+    Color::GREEN,
+    Color::BLUE,
+    Color::PURPLE,
+    Color::BLACK,
+];
 
 fn main() {
     App::new()
@@ -34,7 +41,6 @@ fn main() {
             FrameTimeDiagnosticsPlugin::default(),
             LogDiagnosticsPlugin::default(),
         ))
-        .insert_resource(ClearColor(OUT_SET))
         .add_systems(Startup, (spawn_cameras, spawn_visual))
         .add_systems(
             Update,
@@ -99,7 +105,7 @@ fn spawn_visual(mut cmds: Commands, mut imgs: ResMut<Assets<Image>>) {
             ..default()
         },
         TextureDimension::D2,
-        &OUT_SET.as_rgba_u8(),
+        &PALETTE[0].as_rgba_u8(),
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     );
@@ -117,7 +123,7 @@ fn spawn_visual(mut cmds: Commands, mut imgs: ResMut<Assets<Image>>) {
 f : C  -> C
     z |-> z^2 + c
 */
-fn f(z: Vec2, c: Vec2) -> Vec2 {
+fn mandelbrot_function(z: Vec2, c: Vec2) -> Vec2 {
     /*
     z^2 = (a + bi)^2
         = (a + bi)(a + bi)
@@ -125,6 +131,21 @@ fn f(z: Vec2, c: Vec2) -> Vec2 {
         = (a^2 - b^2) + 2abi <=> <x^2 - y^2, 2xy>
     */
     Vec2::new(z.x * z.x - z.y * z.y, 2. * z.x * z.y) + c
+}
+
+fn calculate_color(n: usize) -> Color {
+    let idx_dec = (PALETTE.len() - 1) as f32 * n as f32 / MAX_ITERATIONS as f32;
+    let (idx, frac) = (idx_dec.trunc() as usize, idx_dec.fract());
+
+    if idx == PALETTE.len() - 1 {
+        *PALETTE.last().unwrap()
+    } else {
+        Color::rgb(
+            f32::lerp(PALETTE[idx].r(), PALETTE[idx + 1].r(), frac),
+            f32::lerp(PALETTE[idx].g(), PALETTE[idx + 1].g(), frac),
+            f32::lerp(PALETTE[idx].b(), PALETTE[idx + 1].b(), frac),
+        )
+    }
 }
 
 fn color_pixels_in_viewport(
@@ -146,24 +167,17 @@ fn color_pixels_in_viewport(
                     .viewport_to_world_2d(cam_glob_xform, Vec2::new(x as f32, y as f32))
                     .unwrap();
                 let mut z = Vec2::ZERO;
-                let mut successful_iterations = 0;
+                let mut n = 0usize;
 
-                for _ in 1..ITERATIONS {
-                    z = f(z, c);
+                for _ in 1..=MAX_ITERATIONS {
+                    z = mandelbrot_function(z, c);
 
-                    if (z.x + z.y).abs() > 2. {
+                    if z.length() > 2. {
                         break;
                     }
-                    successful_iterations += 1;
+                    n += 1;
                 }
-                let rate = successful_iterations as f32 / ITERATIONS as f32;
-
-                Color::rgb(
-                    f32::lerp(OUT_SET.r(), IN_SET.r(), rate),
-                    f32::lerp(OUT_SET.g(), IN_SET.g(), rate),
-                    f32::lerp(OUT_SET.b(), IN_SET.b(), rate),
-                )
-                .as_rgba_u8()
+                calculate_color(n).as_rgba_u8()
             })
             .flatten(),
     );
