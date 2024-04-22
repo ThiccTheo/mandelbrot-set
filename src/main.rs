@@ -34,6 +34,7 @@ fn main() {
                     resolution: WindowResolution::new(WIDTH as f32, HEIGHT as f32),
                     title: String::from("Mandelbrot Set"),
                     mode: WindowMode::Windowed,
+                    position: WindowPosition::Centered(MonitorSelection::Primary),
                     ..default()
                 }),
                 ..default()
@@ -56,12 +57,11 @@ pub struct VisualCamera;
 pub struct CalculationsCamera;
 
 fn spawn_cameras(mut cmds: Commands) {
-    cmds.spawn((VisualCamera, Camera2dBundle::default()));
-
     let mut calc_cam = Camera2dBundle::default();
     calc_cam.projection.scale /= DEFAULT_ZOOM;
     calc_cam.camera.is_active = false;
     cmds.spawn((CalculationsCamera, calc_cam));
+    cmds.spawn((VisualCamera, Camera2dBundle::default()));
 }
 
 fn adjust_view_of_visual(
@@ -70,7 +70,6 @@ fn adjust_view_of_visual(
     kb: Res<ButtonInput<KeyCode>>,
 ) {
     let (mut cam_xform, mut cam_projection) = cam_qry.single_mut();
-
     if let Some(scroll_event) = scroll_wheel_evr.read().nth(0) {
         if scroll_event.y > 0. {
             cam_projection.scale /= 2.;
@@ -109,10 +108,8 @@ fn spawn_visual(mut cmds: Commands, mut imgs: ResMut<Assets<Image>>) {
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     );
-
     let img_handle = imgs.add(img);
     cmds.insert_resource(Visual(img_handle.clone()));
-
     cmds.spawn(SpriteBundle {
         texture: img_handle.clone_weak(),
         ..default()
@@ -136,7 +133,6 @@ fn mandelbrot_function(z: Vec2, c: Vec2) -> Vec2 {
 fn calculate_color(n: usize) -> Color {
     let idx_dec = (PALETTE.len() - 1) as f32 * n as f32 / MAX_ITERATIONS as f32;
     let (idx, frac) = (idx_dec.trunc() as usize, idx_dec.fract());
-
     if idx == PALETTE.len() - 1 {
         *PALETTE.last().unwrap()
     } else {
