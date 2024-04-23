@@ -12,10 +12,10 @@ use {
     rayon::prelude::*,
 };
 
-const WIDTH: usize = 200;
-const HEIGHT: usize = 200;
+const WIDTH: usize = 512;
+const HEIGHT: usize = 512;
 const MAX_ITERATIONS: usize = 50;
-const DEFAULT_ZOOM: f32 = 50.;
+const DEFAULT_ZOOM: f32 = 100.;
 const PALETTE: [Color; 7] = [
     Color::RED,
     Color::ORANGE,
