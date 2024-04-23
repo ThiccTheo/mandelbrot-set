@@ -45,7 +45,7 @@ fn main() {
         .add_systems(Startup, (spawn_cameras, spawn_visual))
         .add_systems(
             Update,
-            (adjust_view_of_visual, color_pixels_in_viewport).chain(),
+            (move_camera, color_pixels_in_viewport).chain(),
         )
         .run();
 }
@@ -64,7 +64,7 @@ fn spawn_cameras(mut cmds: Commands) {
     cmds.spawn((VisualCamera, Camera2dBundle::default()));
 }
 
-fn adjust_view_of_visual(
+fn move_camera(
     mut cam_qry: Query<(&mut Transform, &mut OrthographicProjection), With<CalculationsCamera>>,
     mut scroll_wheel_evr: EventReader<MouseWheel>,
     kb: Res<ButtonInput<KeyCode>>,
@@ -131,15 +131,15 @@ fn mandelbrot_function(z: Vec2, c: Vec2) -> Vec2 {
 }
 
 fn calculate_color(n: usize) -> Color {
-    let idx_dec = (PALETTE.len() - 1) as f32 * n as f32 / MAX_ITERATIONS as f32;
-    let (idx, frac) = (idx_dec.trunc() as usize, idx_dec.fract());
+    let idx_with_fract = (PALETTE.len() - 1) as f32 * n as f32 / MAX_ITERATIONS as f32;
+    let (idx, fract) = (idx_with_fract.trunc() as usize, idx_with_fract.fract());
     if idx == PALETTE.len() - 1 {
         *PALETTE.last().unwrap()
     } else {
         Color::rgb(
-            f32::lerp(PALETTE[idx].r(), PALETTE[idx + 1].r(), frac),
-            f32::lerp(PALETTE[idx].g(), PALETTE[idx + 1].g(), frac),
-            f32::lerp(PALETTE[idx].b(), PALETTE[idx + 1].b(), frac),
+            f32::lerp(PALETTE[idx].r(), PALETTE[idx + 1].r(), fract),
+            f32::lerp(PALETTE[idx].g(), PALETTE[idx + 1].g(), fract),
+            f32::lerp(PALETTE[idx].b(), PALETTE[idx + 1].b(), fract),
         )
     }
 }
@@ -163,17 +163,13 @@ fn color_pixels_in_viewport(
                     .viewport_to_world_2d(cam_glob_xform, Vec2::new(x as f32, y as f32))
                     .unwrap();
                 let mut z = Vec2::ZERO;
-                let mut n = 0usize;
-
-                for _ in 1..=MAX_ITERATIONS {
-                    z = mandelbrot_function(z, c);
-
-                    if z.length() > 2. {
-                        break;
-                    }
+                let mut n = 0;
+                while {
                     n += 1;
-                }
-                calculate_color(n).as_rgba_u8()
+                    z = mandelbrot_function(z, c);
+                    z.length() <= 2. && n <= MAX_ITERATIONS
+                } {}
+                calculate_color(n - 1).as_rgba_u8()
             })
             .flatten(),
     );
